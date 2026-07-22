@@ -20,10 +20,10 @@ function recreateDirectory(path) {
   x2t.FS.mkdir(path);
 }
 
-function convertExampleDocumentTitle() {
+function convertExampleTitleOdt() {
   recreateDirectory('/working');
-  const inputName = 'example-document-title.odt';
-  const outputName = 'example-document-title.docx';
+  const inputName = 'example-title.odt';
+  const outputName = 'example-title.docx';
   const input = fs.readFileSync(`tests/${inputName}`);
   x2t.FS.writeFile(`/working/${inputName}`, input);
   x2t.FS.writeFile(
@@ -42,9 +42,9 @@ function convertExampleDocumentTitle() {
   fs.writeFileSync(`results/${outputName}`, x2t.FS.readFile(`/working/${outputName}`));
 }
 
-function verifyExampleDocumentTitleChart() {
+function verifyExampleTitleChart() {
   const chartXml = readZipEntry(
-    'results/example-document-title.docx',
+    'results/example-title.docx',
     'word/charts/chart1.xml',
   );
   const expectedGradientColors = [
@@ -75,15 +75,39 @@ function verifyExampleDocumentTitleChart() {
     }
   });
 
-  const message = 'Verified Example Document Title chart gradient colors.\n';
+  const message = 'Verified Example Title chart gradient colors.\n';
   fs.writeFileSync('results/verify-regressions.js.log', message);
   process.stdout.write(message);
 }
 
+function verifyExampleTitleOdpImport() {
+  recreateDirectory('/odp-working');
+  x2t.FS.mkdir('/odp-working/tmp');
+  x2t.FS.writeFile('/odp-working/example-title.odp', fs.readFileSync('tests/example-title.odp'));
+  x2t.FS.writeFile(
+    '/odp-working/params.xml',
+    `<?xml version="1.0" encoding="utf-8"?>
+<TaskQueueDataConvert xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <m_sFileFrom>/odp-working/example-title.odp</m_sFileFrom>
+  <m_sTempDir>/odp-working/tmp</m_sTempDir>
+  <m_sFileTo>/odp-working/example-title.bin</m_sFileTo>
+  <m_nFormatFrom>131</m_nFormatFrom>
+  <m_nFormatTo>4099</m_nFormatTo>
+  <m_bIsNoBase64>false</m_bIsNoBase64>
+</TaskQueueDataConvert>`,
+  );
+  const result = x2t.ccall('main1', 'number', ['string'], ['/odp-working/params.xml']);
+  if (result !== 0) throw new Error(`ODP to PPTY regression conversion failed with exit code ${result}`);
+  const output = x2t.FS.readFile('/odp-working/example-title.bin');
+  if (output.length < 1024) throw new Error(`ODP to PPTY regression output is unexpectedly small: ${output.length}`);
+  process.stdout.write('Verified Example Title ODP imports without a WebAssembly function signature mismatch.\n');
+}
+
 x2t.onRuntimeInitialized = function () {
   try {
-    convertExampleDocumentTitle();
-    verifyExampleDocumentTitleChart();
+    convertExampleTitleOdt();
+    verifyExampleTitleChart();
+    verifyExampleTitleOdpImport();
   } catch (error) {
     console.error(error);
     process.exitCode = 1;
