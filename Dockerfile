@@ -750,6 +750,7 @@ RUN cp /core/build/bin/linux_64/x2t* .
 RUN . /emsdk/emsdk_env.sh \
  && npm install --no-save xml2json
 COPY test.js /test/test.js
+COPY verify-regressions.js /test/verify-regressions.js
 
 
 
@@ -765,7 +766,8 @@ RUN mkdir results
 # RUN . /emsdk/emsdk_env.sh \
 #  && node test.js
 RUN . /emsdk/emsdk_env.sh \
- && node test.js 2>&1 | tee results/test.js.log
+ && node test.js 2>&1 | tee results/test.js.log \
+ && node verify-regressions.js
 
 
 FROM scratch AS test-output

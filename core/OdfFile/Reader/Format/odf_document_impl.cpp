@@ -789,11 +789,9 @@ void odf_document::Impl::parse_styles(office_element *element)
 		if(document)
 		{
 			office_master_styles * master_style = dynamic_cast<office_master_styles *>( document->office_master_styles_.get() );
-			if (!master_style)
-				break;
-			unsigned int elements_master_page = master_style->style_master_page_.size();
-			if(master_style->style_master_page_.size() > 1)
+			if (master_style && master_style->style_master_page_.size() > 1)
 			{
+				unsigned int elements_master_page = master_style->style_master_page_.size();
 				for (size_t i = 1; i < master_style->style_master_page_.size(); i++)
 				{
 					
