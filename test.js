@@ -80,6 +80,7 @@ function convert(inputPath, outputPath) {
   const params =  "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
     + "<TaskQueueDataConvert xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
     + "<m_sFontDir>/working/fonts/</m_sFontDir>"
+    + "<m_sAllFontsPath>/working/fonts/AllFonts.js</m_sAllFontsPath>"
     + "<m_sThemeDir>/working/themes</m_sThemeDir>"
     + "<m_sFileFrom>/working/" + inputName + "</m_sFileFrom>"
     + "<m_sFileTo>/working/" + outputName + "</m_sFileTo>"
@@ -109,6 +110,7 @@ function callX2T(workdir, x2tkind) {
 }
 
 const TEST_CONVERSIONS = {
+  '.doc': ['.docx'],
   '.docx': ['.docx', '.odt'],
   '.xlsx': ['.xlsx', '.ods'],
   '.pptx': ['.pptx', '.odp'],

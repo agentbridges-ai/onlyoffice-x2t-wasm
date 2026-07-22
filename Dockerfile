@@ -204,6 +204,8 @@ COPY --from=html /core/Common/3dParty/html /core/Common/3dParty/html
 WORKDIR /core
 RUN sed -i -e 's,$$PWD/src/[^ ]*\.cpp,,' \
     Common/3dParty/html/css/CssCalculator.pri
+RUN sed -i '/CONFIG += css_calculator_without_xhtml/d' \
+    DesktopEditor/graphics/pro/metafile.pri
 RUN --mount=type=cache,sharing=locked,target=/emsdk/upstream/emscripten/cache/ \
     embuild.sh -c "-Wno-register" DesktopEditor/graphics/pro
 # Outputs /core/build/lib/linux_64/libgraphics.a
