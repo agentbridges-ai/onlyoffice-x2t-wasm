@@ -661,6 +661,16 @@ namespace NExtractTools
 				params.m_nFormatTo = pMainFormatTo;
 			}
 		}
+		else if (AVS_OFFICESTUDIO_FILE_DOCUMENT_HTML == nFormatFrom &&
+				 AVS_OFFICESTUDIO_FILE_DOCUMENT_EPUB == nFormatTo)
+		{
+			nRes = html2epub(sFrom, sTo, params, convertParams);
+		}
+		else if (AVS_OFFICESTUDIO_FILE_DOCUMENT_HTML == nFormatFrom &&
+				 AVS_OFFICESTUDIO_FILE_DOCUMENT_FB2 == nFormatTo)
+		{
+			nRes = html2fb(sFrom, sTo, params, convertParams);
+		}
 		else
 		{
 			std::wstring sDocxDir = combinePath(convertParams.m_sTempDir, L"docx_unpacked");

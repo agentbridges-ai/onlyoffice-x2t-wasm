@@ -103,11 +103,35 @@ function verifyExampleTitleOdpImport() {
   process.stdout.write('Verified Example Title ODP imports without a WebAssembly function signature mismatch.\n');
 }
 
+function verifyFb2Export() {
+  const outputPath = 'results/html-export.fb2';
+  const output = fs.readFileSync(outputPath, 'utf8');
+  if (!/<FictionBook\b/i.test(output)) {
+    throw new Error(`FB2 regression output is not a FictionBook document: ${outputPath}`);
+  }
+  process.stdout.write('Verified HTML exports to a FictionBook document.\n');
+}
+
+function verifyHtmlDerivedExports() {
+  const markdown = fs.readFileSync('results/html-export.md', 'utf8');
+  if (!markdown.includes('This paragraph must survive')) {
+    throw new Error('HTML to Markdown regression output lost the document paragraph.');
+  }
+
+  const epubMimeType = readZipEntry('results/html-export.epub', 'mimetype').trim();
+  if (epubMimeType !== 'application/epub+zip') {
+    throw new Error(`HTML to EPUB regression output has an invalid mimetype: ${epubMimeType}`);
+  }
+  process.stdout.write('Verified HTML exports to EPUB and Markdown documents.\n');
+}
+
 x2t.onRuntimeInitialized = function () {
   try {
     convertExampleTitleOdt();
     verifyExampleTitleChart();
     verifyExampleTitleOdpImport();
+    verifyFb2Export();
+    verifyHtmlDerivedExports();
   } catch (error) {
     console.error(error);
     process.exitCode = 1;
