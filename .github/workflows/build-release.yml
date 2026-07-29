@@ -15,6 +15,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Signed tag to build and publish after a workflow-only repair
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -27,11 +32,15 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     permissions:
-      contents: ${{ startsWith(github.ref, 'refs/tags/') && 'write' || 'read' }}
+      contents: write
       id-token: write
       attestations: write
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
       - uses: docker/setup-buildx-action@v4
       - name: Build and run converter tests
         run: |
@@ -49,11 +58,13 @@ jobs:
           test -s results/test.js.log
           test -s build/x2t.js
           test -s build/x2t.wasm
+          git rev-parse HEAD > build/SOURCE_COMMIT
+          cp RELEASE build/RELEASE
       - name: Package release with SHA-256 and SHA-512
         id: package
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME:-manual-${GITHUB_SHA::12}}"
+          version="${RELEASE_TAG:-manual-${GITHUB_SHA::12}}"
           archive="onlyoffice-x2t-wasm-${version}.tar.gz"
           tar --sort=name --mtime="@${SOURCE_DATE_EPOCH:-0}" --owner=0 --group=0 --numeric-owner \
             -czf "${archive}" -C build .
@@ -75,18 +86,19 @@ jobs:
             x2t-files.sha512
           if-no-files-found: error
       - uses: actions/attest-build-provenance@v3
+        if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
         with:
           subject-path: |
             ${{ steps.package.outputs.archive }}
             build/x2t.js
             build/x2t.wasm
       - name: Publish signed-tag release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           ARCHIVE: ${{ steps.package.outputs.archive }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
+          gh release create "${RELEASE_TAG}" \
             "${ARCHIVE}" \
             "${ARCHIVE}.sha256" \
             "${ARCHIVE}.sha512" \
@@ -94,4 +106,4 @@ jobs:
             x2t-files.sha512 \
             --verify-tag \
             --generate-notes \
-            --title "${GITHUB_REF_NAME}"
+            --title "${RELEASE_TAG}"
