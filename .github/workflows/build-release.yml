@@ -1,0 +1,97 @@
+name: Build and attest x2t-wasm
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/build-release.yml"
+      - "core/**"
+      - "Dockerfile"
+      - "embuild.sh"
+      - "pre-js.js"
+      - "test.js"
+      - "tests/**"
+      - "wrap-main.cpp"
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: x2t-wasm-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: ${{ startsWith(github.ref, 'refs/tags/') && 'write' || 'read' }}
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
+      - name: Build and run converter tests
+        run: |
+          docker buildx build \
+            --target test-output \
+            --output type=local,dest=results \
+            --cache-from type=gha,scope=x2t-test \
+            --cache-to type=gha,mode=max,scope=x2t-test \
+            .
+          docker buildx build \
+            --target output \
+            --output type=local,dest=build \
+            --cache-from type=gha,scope=x2t-test \
+            .
+          test -s results/test.js.log
+          test -s build/x2t.js
+          test -s build/x2t.wasm
+      - name: Package release with SHA-256 and SHA-512
+        id: package
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME:-manual-${GITHUB_SHA::12}}"
+          archive="onlyoffice-x2t-wasm-${version}.tar.gz"
+          tar --sort=name --mtime="@${SOURCE_DATE_EPOCH:-0}" --owner=0 --group=0 --numeric-owner \
+            -czf "${archive}" -C build .
+          sha256sum "${archive}" > "${archive}.sha256"
+          sha512sum "${archive}" > "${archive}.sha512"
+          sha256sum build/x2t.js build/x2t.wasm > x2t-files.sha256
+          sha512sum build/x2t.js build/x2t.wasm > x2t-files.sha512
+          echo "archive=${archive}" >> "${GITHUB_OUTPUT}"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: onlyoffice-x2t-wasm-${{ github.sha }}
+          path: |
+            build/
+            results/test.js.log
+            onlyoffice-x2t-wasm-*.tar.gz
+            onlyoffice-x2t-wasm-*.sha256
+            onlyoffice-x2t-wasm-*.sha512
+            x2t-files.sha256
+            x2t-files.sha512
+          if-no-files-found: error
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            ${{ steps.package.outputs.archive }}
+            build/x2t.js
+            build/x2t.wasm
+      - name: Publish signed-tag release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            "${ARCHIVE}" \
+            "${ARCHIVE}.sha256" \
+            "${ARCHIVE}.sha512" \
+            x2t-files.sha256 \
+            x2t-files.sha512 \
+            --verify-tag \
+            --generate-notes \
+            --title "${GITHUB_REF_NAME}"
