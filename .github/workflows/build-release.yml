@@ -64,7 +64,11 @@ jobs:
         id: package
         shell: bash
         run: |
-          version="${RELEASE_TAG:-manual-${GITHUB_SHA::12}}"
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            version="pr-${{ github.event.pull_request.number }}-${GITHUB_SHA::12}"
+          else
+            version="${RELEASE_TAG:-manual-${GITHUB_SHA::12}}"
+          fi
           archive="onlyoffice-x2t-wasm-${version}.tar.gz"
           tar --sort=name --mtime="@${SOURCE_DATE_EPOCH:-0}" --owner=0 --group=0 --numeric-owner \
             -czf "${archive}" -C build .
