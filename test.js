@@ -19,6 +19,9 @@ const getFormatId = function (ext) {
   if (ext === 'odt') { return 67; }
   if (ext === 'txt') { return 69; }
   if (ext === 'html') { return 70; }
+  if (ext === 'epub') { return 72; }
+  if (ext === 'fb2') { return 73; }
+  if (ext === 'md') { return 92; }
 
   // Slides
   if (ext === 'pptx') { return 129; }
@@ -68,7 +71,14 @@ function copyFromWasm(wasmPath, nodePath) {
   fs.writeFileSync(nodePath, data);
 }
 
-function convert(inputPath, outputPath) {
+function getNativeBinFormatId(sourceExt) {
+  if (['doc', 'docx', 'odt'].includes(sourceExt)) { return 8193; }
+  if (['xls', 'xlsx', 'ods'].includes(sourceExt)) { return 8194; }
+  if (['ppt', 'pptx', 'odp'].includes(sourceExt)) { return 8195; }
+  return;
+}
+
+function convert(inputPath, outputPath, nativeSourceExt) {
   initWorkDir();
   const inputName = path.basename(inputPath);
   const outputName = path.basename(outputPath);
@@ -82,11 +92,16 @@ function convert(inputPath, outputPath) {
     + "<m_sFontDir>/working/fonts/</m_sFontDir>"
     + "<m_sAllFontsPath>/working/fonts/AllFonts.js</m_sAllFontsPath>"
     + "<m_sThemeDir>/working/themes</m_sThemeDir>"
+    + "<m_sTempDir>/tmp</m_sTempDir>"
     + "<m_sFileFrom>/working/" + inputName + "</m_sFileFrom>"
     + "<m_sFileTo>/working/" + outputName + "</m_sFileTo>"
     + pdfData
-    // + getFromId(inputFormat)
-    // + getToId(outputFormat)
+    + (inputFormat === 'bin' && getNativeBinFormatId(nativeSourceExt)
+      ? '<m_nFormatFrom>' + getNativeBinFormatId(nativeSourceExt) + '</m_nFormatFrom>'
+      : getFromId(inputFormat))
+    + (outputFormat === 'bin' && getNativeBinFormatId(inputFormat)
+      ? '<m_nFormatTo>' + getNativeBinFormatId(inputFormat) + '</m_nFormatTo>'
+      : getToId(outputFormat))
     + "<m_bIsNoBase64>false</m_bIsNoBase64>"
     + "<m_nCsvTxtEncoding>46</m_nCsvTxtEncoding>"
     + "<m_nCsvDelimiter>4</m_nCsvDelimiter>"
@@ -117,6 +132,7 @@ const TEST_CONVERSIONS = {
   '.odt': ['.docx', '.odt'],
   '.ods': ['.xlsx', '.ods'],
   '.odp': ['.pptx', '.odp'],
+  '.html': ['.fb2', '.epub', '.md'],
 };
 
 function testConvertDir(inputPath) {
@@ -152,10 +168,16 @@ function testConversions(inputPath) {
   if (!conversions) {
     return;
   }
+  if (inputExt === '.html') {
+    for (const ext of conversions) {
+      convert(inputPath, path.join('results', inputName + ext));
+    }
+    return;
+  }
   const binPath = path.join('results', inputName + '.bin');
   convert(inputPath, binPath)
   for (const ext of conversions) {
-    convert(binPath, path.join('results', inputName + ext));
+    convert(binPath, path.join('results', inputName + ext), inputExt.substring(1));
   }
 }
 

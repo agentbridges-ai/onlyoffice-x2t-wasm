@@ -484,17 +484,13 @@ COPY core/DesktopEditor /core/DesktopEditor
 COPY core/HtmlFile2 /core/HtmlFile2
 COPY core/OfficeUtils /core/OfficeUtils
 COPY core/UnicodeConverter /core/UnicodeConverter
+COPY core/OdfFile /core/OdfFile
 COPY --from=common /core/build/lib/linux_64/libkernel.a /core/build/lib/linux_64/
 COPY --from=graphics /core/build/lib/linux_64/libgraphics.a /core/build/lib/linux_64/
 COPY --from=unicodeconverter /core/build/lib/linux_64/libUnicodeConverter.a /core/build/lib/linux_64/
-COPY --from=gumbo /gumbo-parser /gumbo-parser
+COPY --from=boost /usr/local/include/boost /boost/libs/functional/include/boost
+COPY --from=html /core/Common/3dParty/html /core/Common/3dParty/html
 WORKDIR /core
-# RUN find /gumbo-parser -type f | xargs grep RemoveEmptyTag
-# RUN find . -type f | xargs grep RemoveEmptyTag
-# RUN exit 1
-# RUN rm HtmlFile2/src/StringFinder.h
-# RUN sed -i -e 's,./src/StringFinder.h,,' \
-#     HtmlFile2/HtmlFile2.pro
 RUN --mount=type=cache,sharing=locked,target=/emsdk/upstream/emscripten/cache/ \
     embuild.sh Fb2File
 # Outputs /core/build/lib/linux_64/libFb2File.a
@@ -627,8 +623,6 @@ FROM base AS log-symbols
 RUN mkdir -p /core/build/lib/linux_64/
 RUN mkdir -p /out
 WORKDIR /core/build/lib/linux_64/
-COPY --from=gumbo /usr/local/lib/libgumbo.a /core/build/lib/linux_64/
-COPY --from=katana /usr/local/lib/libkatana.a /core/build/lib/linux_64/
 COPY --from=vbaformatlib /core/build/lib/linux_64/libVbaFormatLib.a /core/build/lib/linux_64/
 COPY --from=odffile /core/build/lib/linux_64/libOdfFormatLib.a /core/build/lib/linux_64/
 COPY --from=docformatlib /core/build/lib/linux_64/libDocFormatLib.a /core/build/lib/linux_64/
@@ -715,6 +709,7 @@ COPY --from=network /core/build/lib/linux_64/libkernel_network.a /core/build/lib
 COPY --from=pdffile /core/build/lib/linux_64/libPdfFile.a /core/build/lib/linux_64/
 COPY --from=boost /usr/local/include/boost /boost/libs/functional/include/boost
 COPY --from=cfcpp /core/build/lib/linux_64/libCompoundFileLib.a /core/build/lib/linux_64/
+COPY --from=fb2file /core/build/lib/linux_64/libFb2File.a /core/build/lib/linux_64/
 COPY --from=htmlfile2 /core/build/lib/linux_64/libHtmlFile2.a /core/build/lib/linux_64/
 COPY --from=epubfile /core/build/lib/linux_64/libEpubFile.a /core/build/lib/linux_64/
 COPY --from=xpsfile /core/build/lib/linux_64/libXpsFile.a /core/build/lib/linux_64/
@@ -760,13 +755,12 @@ FROM build AS test
 WORKDIR /test
 COPY tests /test/tests
 COPY non-public-tests /test/tests
-COPY --from=testfiles /tests /test/tests
-COPY --from=documentserver /var/www/onlyoffice/documentserver/server/FileConverter/bin/x2t /bin/
 RUN mkdir results
 # RUN ls -l tests ; exit 1
 # RUN . /emsdk/emsdk_env.sh \
 #  && node test.js
-RUN . /emsdk/emsdk_env.sh \
+RUN set -o pipefail \
+ && . /emsdk/emsdk_env.sh \
  && node test.js 2>&1 | tee results/test.js.log \
  && node verify-regressions.js
 

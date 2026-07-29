@@ -33,7 +33,7 @@
 
 #include "../../../Common/3dParty/pole/pole.h"
 #include "../../../EpubFile/CEpubFile.h"
-// #include "../../../Fb2File/Fb2File.h"
+#include "../../../Fb2File/Fb2File.h"
 #include "../../../HtmlFile2/htmlfile2.h"
 #include "../../../Common/3dParty/md/md2html.h"
 #include "common.h"
@@ -145,6 +145,24 @@ namespace NExtractTools
 		oFile.SetTempDirectory(convertParams.m_sTempDir);
 		return (S_OK == oFile.Convert(sFrom, sTo, false)) ? 0 : AVS_FILEUTILS_ERROR_CONVERT;
 	}
+	_UINT32 html2epub(const std::wstring& sFrom, const std::wstring& sTo, InputParams& params, ConvertParams& convertParams)
+	{
+		CEpubFile oFile;
+		std::wstring sEpubTemp = combinePath(convertParams.m_sTempDir, L"epub");
+		NSDirectory::CreateDirectory(sEpubTemp);
+		oFile.SetTempDirectory(sEpubTemp);
+		return (S_OK == oFile.FromHtml(sFrom, sTo, params.m_sTitle ? *params.m_sTitle : L""))
+			? 0
+			: AVS_FILEUTILS_ERROR_CONVERT;
+	}
+	_UINT32 html2fb(const std::wstring& sFrom, const std::wstring& sTo, InputParams& params, ConvertParams& convertParams)
+	{
+		CFb2File oFile;
+		oFile.SetTmpDirectory(convertParams.m_sTempDir);
+		return (S_OK == oFile.FromHtml(sFrom, sTo, params.m_sTitle ? *params.m_sTitle : L""))
+			? 0
+			: AVS_FILEUTILS_ERROR_CONVERT;
+	}
 	_UINT32 fb2docx_dir(const std::wstring& sFrom, const std::wstring& sTo, InputParams& params, ConvertParams& convertParams)
 	{
 		// CFb2File fb2File;
@@ -219,19 +237,10 @@ namespace NExtractTools
 	// doct_bin -> fb2
 	_UINT32 doct_bin2fb(const std::wstring& sFrom, const std::wstring& sTo, InputParams& params, ConvertParams& convertParams)
 	{
-		// _UINT32 nRes = doct_bin2html_internal(sFrom, sTo, params, convertParams);
-		// if (0 != nRes)
-		// 	return nRes;
-
-		// std::wstring sHtmlFile = combinePath(convertParams.m_sTempDir, L"index.html");
-
-		// CFb2File fb2File;
-		// fb2File.SetTmpDirectory(convertParams.m_sTempDir);
-		// if (S_FALSE == fb2File.FromHtml(sHtmlFile, sTo, params.m_sTitle ? *params.m_sTitle : L""))
-		// 	nRes = AVS_FILEUTILS_ERROR_CONVERT;
-
-		// return nRes;
-		return 0;
+		// Native DOCY -> FB2 requires DoctRenderer, which is intentionally
+		// excluded from the browser WASM build. Browser exports use the
+		// supported HTML -> FB2 route above.
+		return AVS_FILEUTILS_ERROR_CONVERT;
 	}
 	// doct_bin -> html
 	_UINT32 doct_bin2html(const std::wstring& sFrom, const std::wstring& sTo, InputParams& params, ConvertParams& convertParams)
