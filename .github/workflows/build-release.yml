@@ -3,6 +3,8 @@ name: Build and attest x2t-wasm
 on:
   pull_request:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -11,14 +13,19 @@ on:
         description: Fresh signed tag; dispatch this workflow with --ref set to the same tag
         required: false
         type: string
+      no_cache:
+        description: Rebuild every layer for reproducibility and cache-canary verification
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 concurrency:
-  group: x2t-wasm-${{ github.ref }}
-  cancel-in-progress: false
-  queue: max
+  # Superseded PR commits stop early; a tag waits for main's cache-producing run.
+  group: x2t-wasm-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -79,19 +86,28 @@ jobs:
           test "${valid_signature}" = 1
           test "$(sed -n 's/^version=//p' RELEASE)" = "${RELEASE_TAG}"
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
-      - name: Build and run converter tests
+      - name: Remove local output from a previous attempt
         run: |
-          docker buildx build \
-            --target test-output \
-            --output type=local,dest=results \
-            --cache-from type=gha,scope=x2t-test \
-            --cache-to type=gha,mode=max,scope=x2t-test \
-            .
-          docker buildx build \
-            --target output \
-            --output type=local,dest=build \
-            --cache-from type=gha,scope=x2t-test \
-            .
+          rm -rf "${RUNNER_TEMP}/x2t-ci-output" results build
+      - name: Build once, run converter tests, and export the tested converter
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          target: ci-output
+          no-cache: ${{ inputs.no_cache || false }}
+          outputs: type=local,dest=${{ runner.temp }}/x2t-ci-output
+          cache-from: |
+            type=gha,scope=x2t-main-v1
+            type=gha,scope=x2t-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'main-v1' }}
+          cache-to: type=gha,mode=max,scope=x2t-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'main-v1' }},timeout=30m,ignore-error=true
+      - name: Verify and bind the exported payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "${RUNNER_TEMP}/x2t-ci-output/results"
+          test -d "${RUNNER_TEMP}/x2t-ci-output/build"
+          mv "${RUNNER_TEMP}/x2t-ci-output/results" results
+          mv "${RUNNER_TEMP}/x2t-ci-output/build" build
           test -s results/test.js.log
           test -s build/x2t.js
           test -s build/x2t.wasm

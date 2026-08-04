@@ -1,4 +1,4 @@
-FROM ubuntu:22.04 AS base
+FROM ubuntu:22.04@sha256:3b06811b2afd352be909dd088a004166d665dc76d38b13eada33522a9d915c6f AS base
 SHELL ["/bin/bash", "-c"]
 
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
@@ -22,11 +22,9 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
        zip
     
 WORKDIR /
-RUN git clone https://github.com/emscripten-core/emsdk.git
-WORKDIR /emsdk
 ARG emversion=4.0.11
-RUN git fetch -a \
- && git checkout $emversion
+RUN git clone --depth=1 --branch "${emversion}" https://github.com/emscripten-core/emsdk.git
+WORKDIR /emsdk
 RUN ./emsdk install $emversion
 RUN ./emsdk activate $emversion
 
@@ -142,10 +140,8 @@ RUN --mount=type=cache,sharing=locked,target=/emsdk/upstream/emscripten/cache/ \
 FROM base AS boost
 # emscriptens boost does not work because of missing symbols
 WORKDIR /
-RUN git clone https://github.com/boostorg/boost.git
+RUN git clone --depth=1 --branch boost-1.84.0 --recurse-submodules --shallow-submodules https://github.com/boostorg/boost.git
 WORKDIR /boost
-RUN git fetch && git checkout boost-1.84.0
-RUN git submodule update --init --recursive
 RUN . /emsdk/emsdk_env.sh \
  && CXXFLAGS=-fms-extensions emcmake cmake '-DBOOST_EXCLUDE_LIBRARIES=context;cobalt;coroutine;fiber;log;thread;wave;type_erasure;serialization;locale;contract;graph'
 RUN . /emsdk/emsdk_env.sh \
@@ -660,7 +656,7 @@ COPY --from=log-symbols /out /
 
 
 
-FROM onlyoffice/documentserver:8.3.3 AS documentserver
+FROM onlyoffice/documentserver:8.3.3@sha256:0daa2d1d414d49286bfa9495fc0c936e7e73edaf8944a61102a7a6353a952297 AS documentserver
 # Outputs: /var/www/onlyoffice/documentserver/server/FileConverter/bin/x2t
 
 
@@ -776,3 +772,15 @@ COPY --from=build /core/build/bin/linux_64/x2t.js.br x2t.js.br
 COPY --from=build /core/build/bin/linux_64/x2t.wasm.br x2t.wasm.br
 COPY --from=build /core/build/bin/linux_64/x2t.zip x2t.zip
 COPY --from=build /core/build/bin/linux_64/x2t.zip.sha512 x2t.zip.sha512
+
+
+# CI exports the tested converter and its test evidence from one BuildKit solve.
+# Keep the two legacy output targets above for downstream/local compatibility.
+FROM scratch AS ci-output
+COPY --from=test /test/results /results
+COPY --from=build /core/build/bin/linux_64/x2t.js /build/x2t.js
+COPY --from=build /core/build/bin/linux_64/x2t.wasm /build/x2t.wasm
+COPY --from=build /core/build/bin/linux_64/x2t.js.br /build/x2t.js.br
+COPY --from=build /core/build/bin/linux_64/x2t.wasm.br /build/x2t.wasm.br
+COPY --from=build /core/build/bin/linux_64/x2t.zip /build/x2t.zip
+COPY --from=build /core/build/bin/linux_64/x2t.zip.sha512 /build/x2t.zip.sha512
