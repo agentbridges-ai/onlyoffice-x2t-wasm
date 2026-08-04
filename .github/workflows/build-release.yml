@@ -2,22 +2,13 @@ name: Build and attest x2t-wasm
 
 on:
   pull_request:
-    paths:
-      - ".github/workflows/build-release.yml"
-      - "core/**"
-      - "Dockerfile"
-      - "embuild.sh"
-      - "pre-js.js"
-      - "test.js"
-      - "tests/**"
-      - "wrap-main.cpp"
   push:
     tags:
       - "v*"
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Signed tag to build and publish after a workflow-only repair
+        description: Fresh signed tag; dispatch this workflow with --ref set to the same tag
         required: false
         type: string
 
@@ -26,22 +17,68 @@ permissions:
 
 concurrency:
   group: x2t-wasm-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   build:
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
+    outputs:
+      archive: ${{ steps.package.outputs.archive }}
+      source_commit: ${{ steps.source.outputs.commit }}
     env:
-      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+      RELEASE_TAG: ${{ inputs.release_tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ inputs.release_tag || github.ref }}
-      - uses: docker/setup-buildx-action@v4
+          fetch-depth: 0
+      - name: Bind the build to the checked-out source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "commit=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "${GITHUB_ENV}"
+      - name: Verify the immutable signed release identity
+        if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
+        shell: bash
+        env:
+          TRUSTED_RELEASE_FINGERPRINTS: 103D8D08D60D858A8EE33C036CC07C1ABAFAC23D E7806458278200E858936B898400657E99A332BA
+        run: |
+          set -euo pipefail
+          [[ "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$ ]]
+          test "$(git cat-file -t "refs/tags/${RELEASE_TAG}")" = tag
+          test "$(git cat-file tag "refs/tags/${RELEASE_TAG}" | sed -n '3s/^tag //p')" = "${RELEASE_TAG}"
+          test "$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")" = "$(git rev-parse HEAD)"
+          if test "${GITHUB_EVENT_NAME}" = workflow_dispatch; then
+            test "${GITHUB_REF}" = "refs/tags/${RELEASE_TAG}"
+            test "${GITHUB_SHA}" = "$(git rev-parse HEAD)"
+          fi
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor HEAD origin/main
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/Misakago.gpg --output trusted-release-signers.gpg
+          mapfile -t imported_fingerprints < <(
+            gpg --batch --with-colons --import-options show-only --import trusted-release-signers.gpg \
+              | awk -F: '$1 == "fpr" { print $10 }'
+          )
+          read -ra trusted_fingerprints <<<"${TRUSTED_RELEASE_FINGERPRINTS}"
+          for expected in "${trusted_fingerprints[@]}"; do
+            printf '%s\n' "${imported_fingerprints[@]}" | grep --fixed-strings --line-regexp "${expected}"
+          done
+          gpg --batch --import trusted-release-signers.gpg
+          verification="$(git verify-tag --raw "${RELEASE_TAG}" 2>&1)"
+          printf '%s\n' "${verification}"
+          valid_signature=0
+          for expected in "${trusted_fingerprints[@]}"; do
+            if grep -Eq "\[GNUPG:\] VALIDSIG [0-9A-F]+ .* ${expected}$|\[GNUPG:\] VALIDSIG ${expected} " <<<"${verification}"; then
+              valid_signature=1
+            fi
+          done
+          test "${valid_signature}" = 1
+          test "$(sed -n 's/^version=//p' RELEASE)" = "${RELEASE_TAG}"
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
       - name: Build and run converter tests
         run: |
           docker buildx build \
@@ -77,9 +114,9 @@ jobs:
           sha256sum build/x2t.js build/x2t.wasm > x2t-files.sha256
           sha512sum build/x2t.js build/x2t.wasm > x2t-files.sha512
           echo "archive=${archive}" >> "${GITHUB_OUTPUT}"
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: onlyoffice-x2t-wasm-${{ github.sha }}
+          name: onlyoffice-x2t-wasm-${{ steps.source.outputs.commit }}
           path: |
             build/
             results/test.js.log
@@ -89,19 +126,97 @@ jobs:
             x2t-files.sha256
             x2t-files.sha512
           if-no-files-found: error
-      - uses: actions/attest-build-provenance@v3
-        if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.release_tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
+      ARCHIVE: ${{ needs.build.outputs.archive }}
+      SOURCE_COMMIT: ${{ needs.build.outputs.source_commit }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+          fetch-depth: 0
+      - name: Re-verify the signed tag after production approval
+        shell: bash
+        env:
+          TRUSTED_RELEASE_FINGERPRINTS: 103D8D08D60D858A8EE33C036CC07C1ABAFAC23D E7806458278200E858936B898400657E99A332BA
+        run: |
+          set -euo pipefail
+          [[ "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$ ]]
+          test "$(git cat-file -t "refs/tags/${RELEASE_TAG}")" = tag
+          test "$(git cat-file tag "refs/tags/${RELEASE_TAG}" | sed -n '3s/^tag //p')" = "${RELEASE_TAG}"
+          test "$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")" = "${SOURCE_COMMIT}"
+          test "$(git rev-parse HEAD)" = "${SOURCE_COMMIT}"
+          test "${GITHUB_SHA}" = "${SOURCE_COMMIT}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${SOURCE_COMMIT}" origin/main
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/Misakago.gpg --output trusted-release-signers.gpg
+          mapfile -t imported_fingerprints < <(
+            gpg --batch --with-colons --import-options show-only --import trusted-release-signers.gpg \
+              | awk -F: '$1 == "fpr" { print $10 }'
+          )
+          read -ra trusted_fingerprints <<<"${TRUSTED_RELEASE_FINGERPRINTS}"
+          for expected in "${trusted_fingerprints[@]}"; do
+            printf '%s\n' "${imported_fingerprints[@]}" | grep --fixed-strings --line-regexp "${expected}"
+          done
+          gpg --batch --import trusted-release-signers.gpg
+          verification="$(git verify-tag --raw "${RELEASE_TAG}" 2>&1)"
+          printf '%s\n' "${verification}"
+          valid_signature=0
+          for expected in "${trusted_fingerprints[@]}"; do
+            if grep -Eq "\[GNUPG:\] VALIDSIG [0-9A-F]+ .* ${expected}$|\[GNUPG:\] VALIDSIG ${expected} " <<<"${verification}"; then
+              valid_signature=1
+            fi
+          done
+          test "${valid_signature}" = 1
+          test "$(sed -n 's/^version=//p' RELEASE)" = "${RELEASE_TAG}"
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: onlyoffice-x2t-wasm-${{ needs.build.outputs.source_commit }}
+      - name: Verify the retained release payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ARCHIVE}"
+          test "$(cat build/SOURCE_COMMIT)" = "${SOURCE_COMMIT}"
+          test "$(sed -n 's/^version=//p' build/RELEASE)" = "${RELEASE_TAG}"
+          sha256sum --check "${ARCHIVE}.sha256"
+          sha512sum --check "${ARCHIVE}.sha512"
+          sha256sum --check x2t-files.sha256
+          sha512sum --check x2t-files.sha512
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-path: |
-            ${{ steps.package.outputs.archive }}
+            ${{ needs.build.outputs.archive }}
             build/x2t.js
             build/x2t.wasm
       - name: Publish signed-tag release
-        if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          ARCHIVE: ${{ steps.package.outputs.archive }}
         run: |
+          set -euo pipefail
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Release ${RELEASE_TAG} already exists; immutable releases require a fresh signed tag." >&2
+            exit 1
+          fi
+          LOCAL_TAG_OBJECT="$(git rev-parse "refs/tags/${RELEASE_TAG}")"
+          REMOTE_TAG_OBJECT="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha')"
+          test "${REMOTE_TAG_OBJECT}" = "${LOCAL_TAG_OBJECT}"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${REMOTE_TAG_OBJECT}" --jq '.tag')" = "${RELEASE_TAG}"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${REMOTE_TAG_OBJECT}" --jq '.verification.verified')" = true
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${REMOTE_TAG_OBJECT}" --jq '.object.sha')" = "${SOURCE_COMMIT}"
           gh release create "${RELEASE_TAG}" \
             "${ARCHIVE}" \
             "${ARCHIVE}.sha256" \
