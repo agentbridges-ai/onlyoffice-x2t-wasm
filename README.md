@@ -1,6 +1,6 @@
 # Build OnlyOffice x2t for WebAssembly
 
-Current maintained release: `v9.3.0+1` (ONLYOFFICE core
+Current maintained release: `v9.3.0+3` (ONLYOFFICE core
 `v9.3.0.140`, Emscripten `4.0.11`).
 
 Release tags are built in GitHub Actions from the Dockerfile, tested against
@@ -8,8 +8,8 @@ the repository fixtures, packaged reproducibly, and published with SHA-256,
 SHA-512, and GitHub artifact attestations. Verify a downloaded artifact with:
 
 ```shell
-sha256sum --check onlyoffice-x2t-wasm-v9.3.0+1.tar.gz.sha256
-gh attestation verify onlyoffice-x2t-wasm-v9.3.0+1.tar.gz \
+sha256sum --check onlyoffice-x2t-wasm-v9.3.0+3.tar.gz.sha256
+gh attestation verify onlyoffice-x2t-wasm-v9.3.0+3.tar.gz \
   --repo agentbridges-ai/onlyoffice-x2t-wasm
 ```
 
@@ -25,6 +25,17 @@ Build it with:
 ``` shell
 ./build.sh
 ```
+
+The local script and CI both use the `ci-output` target. BuildKit compiles the
+converter once, runs the regression suite against those exact bytes, then
+exports the tested payload and evidence together. GitHub Actions warms a
+default-branch cache on every `main` update; a signed release tag on the same
+commit is serialized behind that run and restores the same cache. Pull requests
+write to isolated cache scopes while being allowed to read the `main` cache.
+Base images and source tags are pinned so a floating dependency cannot silently
+invalidate every compilation layer between otherwise identical builds.
+The manual `no_cache` input provides a cold-build canary whose exported hashes
+can be compared with a normal cached run before changing a release baseline.
 
 ## Update to a new x2t version
 
