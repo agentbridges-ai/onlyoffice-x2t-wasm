@@ -732,7 +732,11 @@ RUN --mount=type=cache,sharing=locked,target=/emsdk/upstream/emscripten/cache/ \
 WORKDIR /core/build/bin/linux_64/
 RUN cp x2t x2t.js
 RUN brotli x2t.wasm x2t.js
-RUN zip x2t.zip x2t.wasm* x2t.js*
+# ZIP stores each member's modification time.  Normalize the four immutable
+# payloads and omit host-specific extra fields so two clean builds package the
+# exact same bytes, not merely the same converter files.
+RUN touch -d '1980-01-01 00:00:00 UTC' x2t.wasm x2t.wasm.br x2t.js x2t.js.br \
+ && zip -X x2t.zip x2t.wasm x2t.wasm.br x2t.js x2t.js.br
 RUN sha512sum x2t.zip > x2t.zip.sha512
 
 RUN mkdir /test
