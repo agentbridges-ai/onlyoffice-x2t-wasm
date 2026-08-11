@@ -23,6 +23,12 @@ SHA-256
 with `media/image1.png`. Fixture privacy metadata is rejected before either
 Canvas golden is evaluated.
 
+The WebAssembly `main1` wrapper resets the document-local identifier generator
+to a fixed seed at the start of every conversion. Generated GUIDs remain unique
+within each document, while wall-clock time and previous conversions can no
+longer alter `Editor.bin`. Each real fixture is converted twice in the same
+module and must be byte-for-byte identical before its exact golden is checked.
+
 Release tags are built in GitHub Actions from the Dockerfile, tested against
 the repository fixtures, packaged reproducibly, and published with SHA-256,
 SHA-512, and GitHub artifact attestations. Verify a downloaded artifact with:

@@ -57,15 +57,16 @@ function runCanvasRegression({
     throw new Error(`${inputName} regression fixture digest changed`);
   }
 
-  recreateDirectory('/working');
-  ensureDirectory('/working/media');
-  ensureDirectory('/working/themes');
-  ensureDirectory('/working/fonts');
-  ensureDirectory('/tmp/x2t-conversion');
-  x2t.FS.writeFile(`/working/${inputName}`, input);
-  x2t.FS.writeFile(
-    '/working/params.xml',
-    `<?xml version="1.0" encoding="utf-8"?>
+  const convert = () => {
+    recreateDirectory('/working');
+    ensureDirectory('/working/media');
+    ensureDirectory('/working/themes');
+    ensureDirectory('/working/fonts');
+    ensureDirectory('/tmp/x2t-conversion');
+    x2t.FS.writeFile(`/working/${inputName}`, input);
+    x2t.FS.writeFile(
+      '/working/params.xml',
+      `<?xml version="1.0" encoding="utf-8"?>
 <TaskQueueDataConvert xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <m_sFileFrom>/working/${inputName}</m_sFileFrom>
   <m_sFileTo>/working/Editor.bin</m_sFileTo>
@@ -76,12 +77,19 @@ function runCanvasRegression({
   <m_nFormatTo>${formatTo}</m_nFormatTo>
   <m_bIsNoBase64>false</m_bIsNoBase64>
 </TaskQueueDataConvert>`,
-  );
-  const result = x2t.ccall('main1', 'number', ['string'], ['/working/params.xml']);
-  if (result !== 0) {
-    throw new Error(`${inputName} Canvas conversion failed with exit code ${result}`);
+    );
+    const result = x2t.ccall('main1', 'number', ['string'], ['/working/params.xml']);
+    if (result !== 0) {
+      throw new Error(`${inputName} Canvas conversion failed with exit code ${result}`);
+    }
+    return Buffer.from(x2t.FS.readFile('/working/Editor.bin'));
+  };
+
+  const output = convert();
+  const repeatedOutput = convert();
+  if (!output.equals(repeatedOutput)) {
+    throw new Error(`${inputName} Canvas output is not deterministic within one module`);
   }
-  const output = x2t.FS.readFile('/working/Editor.bin');
   const actualHeader = Buffer.from(output.subarray(0, header.length)).toString('ascii');
   if (actualHeader !== header || output.length !== outputSize || sha256(output) !== outputSha256) {
     throw new Error(
