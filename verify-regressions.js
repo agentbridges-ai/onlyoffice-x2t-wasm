@@ -99,8 +99,8 @@ function verifyNativeOfficeCanvasModels() {
   runCanvasRegression({
     inputName: 'example-document-title-ole.doc',
     inputSha256: 'd85e44ae5368ccbbe57ded8533ced05a250c30cfa15da10f19fdaf63f080238c',
-    outputSha256: '074a9b350ff6a6e1ee32866c03416a0682c05635cdb8f3f60b6e4a02eaad9a2a',
-    outputSize: 132030,
+    outputSha256: '3487cf192cbdea43816c31712dc7e9a4846bb8b1958a1b0d273d8ecd42fde93d',
+    outputSize: 132614,
     formatFrom: 66,
     formatTo: 8193,
     header: 'DOCY;v5;',

@@ -10,6 +10,14 @@ formats (`66 -> 8193` and `257 -> 8194`) with `m_bIsNoBase64=false`. The gate
 pins the fixture and resulting `Editor.bin` SHA-256 digests, including embedded
 OLE media and workbook media.
 
+The maintained source build's legacy OLE DOC baseline is `DOCY;v5;`, 132,614
+bytes, SHA-256
+`3487cf192cbdea43816c31712dc7e9a4846bb8b1958a1b0d273d8ecd42fde93d`.
+This value is deliberately tied to the clean build produced by this repository,
+not to a previously distributed browser-carried converter binary. The gate also
+requires `display6image1.bin`, `display6image1.emf`, and
+`display6image1.svg`, so changing the digest cannot mask lost embedded media.
+
 Release tags are built in GitHub Actions from the Dockerfile, tested against
 the repository fixtures, packaged reproducibly, and published with SHA-256,
 SHA-512, and GitHub artifact attestations. Verify a downloaded artifact with:
