@@ -108,14 +108,26 @@ function verifyNativeOfficeCanvasModels() {
   });
   runCanvasRegression({
     inputName: 'pivot-slicer-showcase.xlsx',
-    inputSha256: 'a46b11d91e41851d1716c35d919eb8803c836215e95d4721321f2fae990aec4c',
-    outputSha256: '214e2f23d6437c0bce7c3f9a06625c2b1db115652237dfa058c5031f27c528c2',
-    outputSize: 85090,
+    inputSha256: 'ffecc0a33c9e41b392fbee30127a97f3e5c3577c717be103471460bd07c2ec58',
+    outputSha256: '2424d315c3a7e2490cf2ab9e6ef9ff48223f29bdf4fe5a2dc610308da521cea5',
+    outputSize: 85138,
     formatFrom: 257,
     formatTo: 8194,
     header: 'XLSY;v2;',
     expectedMedia: ['image1.png'],
   });
+
+  const workbookXml = readZipEntry(
+    'tests/pivot-slicer-showcase.xlsx',
+    'xl/workbook.xml',
+  );
+  const coreXml = readZipEntry(
+    'tests/pivot-slicer-showcase.xlsx',
+    'docProps/core.xml',
+  );
+  if (/x15ac:absPath|\/Users\//.test(workbookXml) || />Y X</.test(coreXml)) {
+    throw new Error('Pivot/Slicer fixture contains local author or filesystem metadata');
+  }
 }
 
 function convertExampleTitleOdt() {
