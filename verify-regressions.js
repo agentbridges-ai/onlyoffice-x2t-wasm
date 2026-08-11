@@ -1,4 +1,5 @@
 const { execFileSync } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 
 const x2t = require('./x2t');
@@ -13,11 +14,108 @@ function readZipEntry(archivePath, entryPath) {
 function recreateDirectory(path) {
   if (x2t.FS.analyzePath(path).exists) {
     for (const entry of x2t.FS.readdir(path)) {
-      if (entry !== '.' && entry !== '..') x2t.FS.unlink(`${path}/${entry}`);
+      if (entry === '.' || entry === '..') continue;
+      const child = `${path}/${entry}`;
+      const stat = x2t.FS.stat(child);
+      if (x2t.FS.isDir(stat.mode)) {
+        recreateDirectory(child);
+        x2t.FS.rmdir(child);
+      } else {
+        x2t.FS.unlink(child);
+      }
     }
     return;
   }
   x2t.FS.mkdir(path);
+}
+
+function sha256(data) {
+  return crypto.createHash('sha256').update(data).digest('hex');
+}
+
+function ensureDirectory(path) {
+  const parts = path.split('/').filter(Boolean);
+  let current = '';
+  for (const part of parts) {
+    current += `/${part}`;
+    if (!x2t.FS.analyzePath(current).exists) x2t.FS.mkdir(current);
+  }
+}
+
+function runCanvasRegression({
+  inputName,
+  inputSha256,
+  outputSha256,
+  outputSize,
+  formatFrom,
+  formatTo,
+  header,
+  expectedMedia,
+}) {
+  const input = fs.readFileSync(`tests/${inputName}`);
+  if (sha256(input) !== inputSha256) {
+    throw new Error(`${inputName} regression fixture digest changed`);
+  }
+
+  recreateDirectory('/working');
+  ensureDirectory('/working/media');
+  ensureDirectory('/working/themes');
+  ensureDirectory('/working/fonts');
+  ensureDirectory('/tmp/x2t-conversion');
+  x2t.FS.writeFile(`/working/${inputName}`, input);
+  x2t.FS.writeFile(
+    '/working/params.xml',
+    `<?xml version="1.0" encoding="utf-8"?>
+<TaskQueueDataConvert xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <m_sFileFrom>/working/${inputName}</m_sFileFrom>
+  <m_sFileTo>/working/Editor.bin</m_sFileTo>
+  <m_sThemeDir>/working/themes</m_sThemeDir>
+  <m_sFontDir>/working/fonts/</m_sFontDir>
+  <m_sTempDir>/tmp/x2t-conversion</m_sTempDir>
+  <m_nFormatFrom>${formatFrom}</m_nFormatFrom>
+  <m_nFormatTo>${formatTo}</m_nFormatTo>
+  <m_bIsNoBase64>false</m_bIsNoBase64>
+</TaskQueueDataConvert>`,
+  );
+  const result = x2t.ccall('main1', 'number', ['string'], ['/working/params.xml']);
+  if (result !== 0) {
+    throw new Error(`${inputName} Canvas conversion failed with exit code ${result}`);
+  }
+  const output = x2t.FS.readFile('/working/Editor.bin');
+  const actualHeader = Buffer.from(output.subarray(0, header.length)).toString('ascii');
+  if (actualHeader !== header || output.length !== outputSize || sha256(output) !== outputSha256) {
+    throw new Error(
+      `${inputName} Canvas output changed: ${actualHeader}, ${output.length} bytes, ${sha256(output)}`,
+    );
+  }
+  const media = x2t.FS.readdir('/working/media').filter((name) => name !== '.' && name !== '..').sort();
+  for (const name of expectedMedia) {
+    if (!media.includes(name)) throw new Error(`${inputName} lost media/${name}`);
+  }
+  process.stdout.write(`Verified ${inputName} -> ${header} (${outputSize} bytes).\n`);
+}
+
+function verifyNativeOfficeCanvasModels() {
+  runCanvasRegression({
+    inputName: 'example-document-title-ole.doc',
+    inputSha256: 'd85e44ae5368ccbbe57ded8533ced05a250c30cfa15da10f19fdaf63f080238c',
+    outputSha256: '074a9b350ff6a6e1ee32866c03416a0682c05635cdb8f3f60b6e4a02eaad9a2a',
+    outputSize: 132030,
+    formatFrom: 66,
+    formatTo: 8193,
+    header: 'DOCY;v5;',
+    expectedMedia: ['display6image1.bin', 'display6image1.emf', 'display6image1.svg'],
+  });
+  runCanvasRegression({
+    inputName: 'pivot-slicer-showcase.xlsx',
+    inputSha256: 'a46b11d91e41851d1716c35d919eb8803c836215e95d4721321f2fae990aec4c',
+    outputSha256: '214e2f23d6437c0bce7c3f9a06625c2b1db115652237dfa058c5031f27c528c2',
+    outputSize: 85090,
+    formatFrom: 257,
+    formatTo: 8194,
+    header: 'XLSY;v2;',
+    expectedMedia: ['image1.png'],
+  });
 }
 
 function convertExampleTitleOdt() {
@@ -130,6 +228,7 @@ x2t.onRuntimeInitialized = function () {
     convertExampleTitleOdt();
     verifyExampleTitleChart();
     verifyExampleTitleOdpImport();
+    verifyNativeOfficeCanvasModels();
     verifyFb2Export();
     verifyHtmlDerivedExports();
   } catch (error) {

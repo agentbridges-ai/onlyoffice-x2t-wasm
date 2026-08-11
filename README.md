@@ -1,15 +1,22 @@
 # Build OnlyOffice x2t for WebAssembly
 
-Current maintained release: `v9.3.0+3` (ONLYOFFICE core
+Current maintained release: `v9.3.0+4` (ONLYOFFICE core
 `v9.3.0.140`, Emscripten `4.0.11`).
+
+The release converter is linked with `ALLOW_MEMORY_GROWTH` and
+`EMULATE_FUNCTION_POINTER_CASTS=1`. Its immutable build gate converts the real
+legacy OLE DOC and native PivotTable/Slicer XLSX fixtures directly to Canvas
+formats (`66 -> 8193` and `257 -> 8194`) with `m_bIsNoBase64=false`. The gate
+pins the fixture and resulting `Editor.bin` SHA-256 digests, including embedded
+OLE media and workbook media.
 
 Release tags are built in GitHub Actions from the Dockerfile, tested against
 the repository fixtures, packaged reproducibly, and published with SHA-256,
 SHA-512, and GitHub artifact attestations. Verify a downloaded artifact with:
 
 ```shell
-sha256sum --check onlyoffice-x2t-wasm-v9.3.0+3.tar.gz.sha256
-gh attestation verify onlyoffice-x2t-wasm-v9.3.0+3.tar.gz \
+sha256sum --check onlyoffice-x2t-wasm-v9.3.0+4.tar.gz.sha256
+gh attestation verify onlyoffice-x2t-wasm-v9.3.0+4.tar.gz \
   --repo agentbridges-ai/onlyoffice-x2t-wasm
 ```
 
