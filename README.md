@@ -17,6 +17,11 @@ This value is deliberately tied to the clean build produced by this repository,
 not to a previously distributed browser-carried converter binary. The gate also
 requires `display6image1.bin`, `display6image1.emf`, and
 `display6image1.svg`, so changing the digest cannot mask lost embedded media.
+The sanitized native PivotTable/Slicer baseline is `XLSY;v2;`, 85,138 bytes,
+SHA-256
+`dc0acc3071dfdd177e2c45eec6437b8e11b622f5457c22274d591252ac8538e1`,
+with `media/image1.png`. Fixture privacy metadata is rejected before either
+Canvas golden is evaluated.
 
 Release tags are built in GitHub Actions from the Dockerfile, tested against
 the repository fixtures, packaged reproducibly, and published with SHA-256,

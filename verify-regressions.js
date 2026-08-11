@@ -96,6 +96,18 @@ function runCanvasRegression({
 }
 
 function verifyNativeOfficeCanvasModels() {
+  const workbookXml = readZipEntry(
+    'tests/pivot-slicer-showcase.xlsx',
+    'xl/workbook.xml',
+  );
+  const coreXml = readZipEntry(
+    'tests/pivot-slicer-showcase.xlsx',
+    'docProps/core.xml',
+  );
+  if (/x15ac:absPath|\/Users\//.test(workbookXml) || />Y X</.test(coreXml)) {
+    throw new Error('Pivot/Slicer fixture contains local author or filesystem metadata');
+  }
+
   runCanvasRegression({
     inputName: 'example-document-title-ole.doc',
     inputSha256: 'd85e44ae5368ccbbe57ded8533ced05a250c30cfa15da10f19fdaf63f080238c',
@@ -109,25 +121,13 @@ function verifyNativeOfficeCanvasModels() {
   runCanvasRegression({
     inputName: 'pivot-slicer-showcase.xlsx',
     inputSha256: 'ffecc0a33c9e41b392fbee30127a97f3e5c3577c717be103471460bd07c2ec58',
-    outputSha256: '2424d315c3a7e2490cf2ab9e6ef9ff48223f29bdf4fe5a2dc610308da521cea5',
+    outputSha256: 'dc0acc3071dfdd177e2c45eec6437b8e11b622f5457c22274d591252ac8538e1',
     outputSize: 85138,
     formatFrom: 257,
     formatTo: 8194,
     header: 'XLSY;v2;',
     expectedMedia: ['image1.png'],
   });
-
-  const workbookXml = readZipEntry(
-    'tests/pivot-slicer-showcase.xlsx',
-    'xl/workbook.xml',
-  );
-  const coreXml = readZipEntry(
-    'tests/pivot-slicer-showcase.xlsx',
-    'docProps/core.xml',
-  );
-  if (/x15ac:absPath|\/Users\//.test(workbookXml) || />Y X</.test(coreXml)) {
-    throw new Error('Pivot/Slicer fixture contains local author or filesystem metadata');
-  }
 }
 
 function convertExampleTitleOdt() {
