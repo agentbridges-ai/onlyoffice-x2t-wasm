@@ -10,9 +10,9 @@ formats (`66 -> 8193` and `257 -> 8194`) with `m_bIsNoBase64=false`. The gate
 pins the fixture and resulting `Editor.bin` SHA-256 digests, including embedded
 OLE media and workbook media.
 
-The maintained source build's legacy OLE DOC baseline is `DOCY;v5;`, 132,614
+The maintained source build's cold-module legacy OLE DOC baseline is `DOCY;v5;`, 132,030
 bytes, SHA-256
-`3487cf192cbdea43816c31712dc7e9a4846bb8b1958a1b0d273d8ecd42fde93d`.
+`074a9b350ff6a6e1ee32866c03416a0682c05635cdb8f3f60b6e4a02eaad9a2a`.
 This value is deliberately tied to the clean build produced by this repository,
 not to a previously distributed browser-carried converter binary. The gate also
 requires `display6image1.bin`, `display6image1.emf`, and
