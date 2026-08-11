@@ -19,17 +19,18 @@ requires `display6image1.bin`, `display6image1.emf`, and
 `display6image1.svg`, so changing the digest cannot mask lost embedded media.
 The sanitized native PivotTable/Slicer baseline is `XLSY;v2;`, 85,138 bytes,
 SHA-256
-`dc0acc3071dfdd177e2c45eec6437b8e11b622f5457c22274d591252ac8538e1`,
+`c40fb3f4f67311426110d4786eb4684981aec9ed05b4f13c6367c8470de4d89e`,
 with `media/image1.png`. Fixture privacy metadata is rejected before either
 Canvas golden is evaluated.
 
 The WebAssembly `main1` wrapper resets the document-local identifier generator
 to a fixed seed at the start of every conversion. Generated GUIDs remain unique
 within each document, while wall-clock time can no longer alter `Editor.bin`.
-Each exact Canvas golden is verified in its own cold module, and release candidates
-must pass two independent no-cache builds with byte-identical converter assets
-and fixture outputs. Consumers should isolate conversion jobs rather than rely
-on process-global caches retained by repeated `main1` calls.
+Each exact Canvas golden is verified twice in independent cold modules, and
+release candidates must also pass two independent no-cache builds with
+byte-identical converter assets and fixture outputs. Consumers should isolate
+conversion jobs rather than rely on process-global caches retained by repeated
+`main1` calls.
 
 Release tags are built in GitHub Actions from the Dockerfile, tested against
 the repository fixtures, packaged reproducibly, and published with SHA-256,

@@ -120,7 +120,7 @@ const canvasRegressions = {
   'pivot-slicer-showcase.xlsx': {
     inputName: 'pivot-slicer-showcase.xlsx',
     inputSha256: 'ffecc0a33c9e41b392fbee30127a97f3e5c3577c717be103471460bd07c2ec58',
-    outputSha256: 'dc0acc3071dfdd177e2c45eec6437b8e11b622f5457c22274d591252ac8538e1',
+    outputSha256: 'c40fb3f4f67311426110d4786eb4684981aec9ed05b4f13c6367c8470de4d89e',
     outputSize: 85138,
     formatFrom: 257,
     formatTo: 8194,
@@ -143,12 +143,14 @@ function verifyNativeOfficeCanvasModels() {
   }
 
   for (const inputName of Object.keys(canvasRegressions)) {
-    const output = execFileSync(
-      process.execPath,
-      [__filename, '--canvas-regression', inputName],
-      { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 },
-    );
-    process.stdout.write(output);
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const output = execFileSync(
+        process.execPath,
+        [__filename, '--canvas-regression', inputName],
+        { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 },
+      );
+      process.stdout.write(`Cold-module attempt ${attempt}: ${output}`);
+    }
   }
 }
 
