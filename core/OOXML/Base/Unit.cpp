@@ -408,6 +408,10 @@ double Emu_To_Multi (const double &dValue)
 
 namespace XmlUtils
 {
+	namespace
+	{
+		bool g_randInitialized = false;
+	}
 	// common
 	int GetDigit(wchar_t c)
 	{
@@ -756,13 +760,17 @@ namespace XmlUtils
 	int Rand()
 	{
 		//rand returns integral value range between 0 and RAND_MAX.(RAND_MAX at least 32767.)
-		static bool init = false;   /* ensure different random header each time */
-		if (!init)
+		if (!g_randInitialized)
 		{
-			init = true;
+			g_randInitialized = true;
 			srand((unsigned int) time(NULL));
 		}
 		return std::rand();
+	}
+	void ResetRand(unsigned int seed)
+	{
+		g_randInitialized = true;
+		srand(seed);
 	}
 	int GenerateInt()
 	{

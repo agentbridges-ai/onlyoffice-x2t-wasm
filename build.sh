@@ -3,5 +3,14 @@
 set -euxo pipefail
 
 rm -rf results build
-docker build --target test-output -o results .
-docker build --target output -o build .
+ci_output="$(mktemp -d)"
+trap 'rm -rf "${ci_output}"' EXIT
+
+docker build --target ci-output -o "${ci_output}" .
+
+mv "${ci_output}/results" results
+mv "${ci_output}/build" build
+
+test -s results/test.js.log
+test -s build/x2t.js
+test -s build/x2t.wasm

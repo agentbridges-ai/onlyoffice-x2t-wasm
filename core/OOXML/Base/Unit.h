@@ -170,6 +170,7 @@ namespace XmlUtils
 	std::string ToString(double value, const char* format);
 
 	int Rand();
+	void ResetRand(unsigned int seed);
 	int GenerateInt();
 
 	std::wstring GenerateGuid();
@@ -179,4 +180,3 @@ namespace XmlUtils
 	std::wstring DeleteNonUnicode(const std::wstring& data);
 	std::wstring EncodeXmlStringExtend(const std::wstring& data, bool bDeleteNoUnicode = true);
 }
-

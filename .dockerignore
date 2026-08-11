@@ -1,0 +1,11 @@
+.git
+.github
+build
+results
+*.log
+trusted-release-signers.gpg
+onlyoffice-x2t-wasm-*.tar.gz
+onlyoffice-x2t-wasm-*.sha256
+onlyoffice-x2t-wasm-*.sha512
+x2t-files.sha256
+x2t-files.sha512

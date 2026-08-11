@@ -1,4 +1,4 @@
-FROM ubuntu:22.04 AS base
+FROM ubuntu:22.04@sha256:3b06811b2afd352be909dd088a004166d665dc76d38b13eada33522a9d915c6f AS base
 SHELL ["/bin/bash", "-c"]
 
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
@@ -22,11 +22,9 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
        zip
     
 WORKDIR /
-RUN git clone https://github.com/emscripten-core/emsdk.git
-WORKDIR /emsdk
 ARG emversion=4.0.11
-RUN git fetch -a \
- && git checkout $emversion
+RUN git clone --depth=1 --branch "${emversion}" https://github.com/emscripten-core/emsdk.git
+WORKDIR /emsdk
 RUN ./emsdk install $emversion
 RUN ./emsdk activate $emversion
 
@@ -142,10 +140,8 @@ RUN --mount=type=cache,sharing=locked,target=/emsdk/upstream/emscripten/cache/ \
 FROM base AS boost
 # emscriptens boost does not work because of missing symbols
 WORKDIR /
-RUN git clone https://github.com/boostorg/boost.git
+RUN git clone --depth=1 --branch boost-1.84.0 --recurse-submodules --shallow-submodules https://github.com/boostorg/boost.git
 WORKDIR /boost
-RUN git fetch && git checkout boost-1.84.0
-RUN git submodule update --init --recursive
 RUN . /emsdk/emsdk_env.sh \
  && CXXFLAGS=-fms-extensions emcmake cmake '-DBOOST_EXCLUDE_LIBRARIES=context;cobalt;coroutine;fiber;log;thread;wave;type_erasure;serialization;locale;contract;graph'
 RUN . /emsdk/emsdk_env.sh \
@@ -484,17 +480,13 @@ COPY core/DesktopEditor /core/DesktopEditor
 COPY core/HtmlFile2 /core/HtmlFile2
 COPY core/OfficeUtils /core/OfficeUtils
 COPY core/UnicodeConverter /core/UnicodeConverter
+COPY core/OdfFile /core/OdfFile
 COPY --from=common /core/build/lib/linux_64/libkernel.a /core/build/lib/linux_64/
 COPY --from=graphics /core/build/lib/linux_64/libgraphics.a /core/build/lib/linux_64/
 COPY --from=unicodeconverter /core/build/lib/linux_64/libUnicodeConverter.a /core/build/lib/linux_64/
-COPY --from=gumbo /gumbo-parser /gumbo-parser
+COPY --from=boost /usr/local/include/boost /boost/libs/functional/include/boost
+COPY --from=html /core/Common/3dParty/html /core/Common/3dParty/html
 WORKDIR /core
-# RUN find /gumbo-parser -type f | xargs grep RemoveEmptyTag
-# RUN find . -type f | xargs grep RemoveEmptyTag
-# RUN exit 1
-# RUN rm HtmlFile2/src/StringFinder.h
-# RUN sed -i -e 's,./src/StringFinder.h,,' \
-#     HtmlFile2/HtmlFile2.pro
 RUN --mount=type=cache,sharing=locked,target=/emsdk/upstream/emscripten/cache/ \
     embuild.sh Fb2File
 # Outputs /core/build/lib/linux_64/libFb2File.a
@@ -627,8 +619,6 @@ FROM base AS log-symbols
 RUN mkdir -p /core/build/lib/linux_64/
 RUN mkdir -p /out
 WORKDIR /core/build/lib/linux_64/
-COPY --from=gumbo /usr/local/lib/libgumbo.a /core/build/lib/linux_64/
-COPY --from=katana /usr/local/lib/libkatana.a /core/build/lib/linux_64/
 COPY --from=vbaformatlib /core/build/lib/linux_64/libVbaFormatLib.a /core/build/lib/linux_64/
 COPY --from=odffile /core/build/lib/linux_64/libOdfFormatLib.a /core/build/lib/linux_64/
 COPY --from=docformatlib /core/build/lib/linux_64/libDocFormatLib.a /core/build/lib/linux_64/
@@ -666,7 +656,7 @@ COPY --from=log-symbols /out /
 
 
 
-FROM onlyoffice/documentserver:8.3.3 AS documentserver
+FROM onlyoffice/documentserver:8.3.3@sha256:0daa2d1d414d49286bfa9495fc0c936e7e73edaf8944a61102a7a6353a952297 AS documentserver
 # Outputs: /var/www/onlyoffice/documentserver/server/FileConverter/bin/x2t
 
 
@@ -715,6 +705,7 @@ COPY --from=network /core/build/lib/linux_64/libkernel_network.a /core/build/lib
 COPY --from=pdffile /core/build/lib/linux_64/libPdfFile.a /core/build/lib/linux_64/
 COPY --from=boost /usr/local/include/boost /boost/libs/functional/include/boost
 COPY --from=cfcpp /core/build/lib/linux_64/libCompoundFileLib.a /core/build/lib/linux_64/
+COPY --from=fb2file /core/build/lib/linux_64/libFb2File.a /core/build/lib/linux_64/
 COPY --from=htmlfile2 /core/build/lib/linux_64/libHtmlFile2.a /core/build/lib/linux_64/
 COPY --from=epubfile /core/build/lib/linux_64/libEpubFile.a /core/build/lib/linux_64/
 COPY --from=xpsfile /core/build/lib/linux_64/libXpsFile.a /core/build/lib/linux_64/
@@ -741,7 +732,11 @@ RUN --mount=type=cache,sharing=locked,target=/emsdk/upstream/emscripten/cache/ \
 WORKDIR /core/build/bin/linux_64/
 RUN cp x2t x2t.js
 RUN brotli x2t.wasm x2t.js
-RUN zip x2t.zip x2t.wasm* x2t.js*
+# ZIP stores each member's modification time.  Normalize the four immutable
+# payloads and omit host-specific extra fields so two clean builds package the
+# exact same bytes, not merely the same converter files.
+RUN touch -d '1980-01-01 00:00:00 UTC' x2t.wasm x2t.wasm.br x2t.js x2t.js.br \
+ && zip -X x2t.zip x2t.wasm x2t.wasm.br x2t.js x2t.js.br
 RUN sha512sum x2t.zip > x2t.zip.sha512
 
 RUN mkdir /test
@@ -760,15 +755,14 @@ FROM build AS test
 WORKDIR /test
 COPY tests /test/tests
 COPY non-public-tests /test/tests
-COPY --from=testfiles /tests /test/tests
-COPY --from=documentserver /var/www/onlyoffice/documentserver/server/FileConverter/bin/x2t /bin/
 RUN mkdir results
 # RUN ls -l tests ; exit 1
 # RUN . /emsdk/emsdk_env.sh \
 #  && node test.js
-RUN . /emsdk/emsdk_env.sh \
+RUN set -o pipefail \
+ && . /emsdk/emsdk_env.sh \
  && node test.js 2>&1 | tee results/test.js.log \
- && node verify-regressions.js
+ && node verify-regressions.js 2>&1 | tee results/verify-regressions.log
 
 
 FROM scratch AS test-output
@@ -782,3 +776,15 @@ COPY --from=build /core/build/bin/linux_64/x2t.js.br x2t.js.br
 COPY --from=build /core/build/bin/linux_64/x2t.wasm.br x2t.wasm.br
 COPY --from=build /core/build/bin/linux_64/x2t.zip x2t.zip
 COPY --from=build /core/build/bin/linux_64/x2t.zip.sha512 x2t.zip.sha512
+
+
+# CI exports the tested converter and its test evidence from one BuildKit solve.
+# Keep the two legacy output targets above for downstream/local compatibility.
+FROM scratch AS ci-output
+COPY --from=test /test/results /results
+COPY --from=build /core/build/bin/linux_64/x2t.js /build/x2t.js
+COPY --from=build /core/build/bin/linux_64/x2t.wasm /build/x2t.wasm
+COPY --from=build /core/build/bin/linux_64/x2t.js.br /build/x2t.js.br
+COPY --from=build /core/build/bin/linux_64/x2t.wasm.br /build/x2t.wasm.br
+COPY --from=build /core/build/bin/linux_64/x2t.zip /build/x2t.zip
+COPY --from=build /core/build/bin/linux_64/x2t.zip.sha512 /build/x2t.zip.sha512
