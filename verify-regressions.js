@@ -85,11 +85,12 @@ function runCanvasRegression({
     return Buffer.from(x2t.FS.readFile('/working/Editor.bin'));
   };
 
+  // Release reproducibility is checked from a cold x2t module. The converter
+  // retains document-local caches between main1 calls, so a warm second call
+  // is not a byte-for-byte clean-build comparison. Every CI invocation loads
+  // this verifier in a fresh Node process, while two independent no-cache
+  // workflow runs compare the resulting golden and release artifacts.
   const output = convert();
-  const repeatedOutput = convert();
-  if (!output.equals(repeatedOutput)) {
-    throw new Error(`${inputName} Canvas output is not deterministic within one module`);
-  }
   const actualHeader = Buffer.from(output.subarray(0, header.length)).toString('ascii');
   if (actualHeader !== header || output.length !== outputSize || sha256(output) !== outputSha256) {
     throw new Error(
@@ -100,7 +101,9 @@ function runCanvasRegression({
   for (const name of expectedMedia) {
     if (!media.includes(name)) throw new Error(`${inputName} lost media/${name}`);
   }
-  process.stdout.write(`Verified ${inputName} -> ${header} (${outputSize} bytes).\n`);
+  process.stdout.write(
+    `Verified ${inputName} -> ${header} (${outputSize} bytes, sha256 ${outputSha256}).\n`,
+  );
 }
 
 function verifyNativeOfficeCanvasModels() {
