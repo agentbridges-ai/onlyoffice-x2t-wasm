@@ -106,6 +106,29 @@ function runCanvasRegression({
   );
 }
 
+const canvasRegressions = {
+  'example-document-title-ole.doc': {
+    inputName: 'example-document-title-ole.doc',
+    inputSha256: 'd85e44ae5368ccbbe57ded8533ced05a250c30cfa15da10f19fdaf63f080238c',
+    outputSha256: '3487cf192cbdea43816c31712dc7e9a4846bb8b1958a1b0d273d8ecd42fde93d',
+    outputSize: 132614,
+    formatFrom: 66,
+    formatTo: 8193,
+    header: 'DOCY;v5;',
+    expectedMedia: ['display6image1.bin', 'display6image1.emf', 'display6image1.svg'],
+  },
+  'pivot-slicer-showcase.xlsx': {
+    inputName: 'pivot-slicer-showcase.xlsx',
+    inputSha256: 'ffecc0a33c9e41b392fbee30127a97f3e5c3577c717be103471460bd07c2ec58',
+    outputSha256: 'dc0acc3071dfdd177e2c45eec6437b8e11b622f5457c22274d591252ac8538e1',
+    outputSize: 85138,
+    formatFrom: 257,
+    formatTo: 8194,
+    header: 'XLSY;v2;',
+    expectedMedia: ['image1.png'],
+  },
+};
+
 function verifyNativeOfficeCanvasModels() {
   const workbookXml = readZipEntry(
     'tests/pivot-slicer-showcase.xlsx',
@@ -119,26 +142,14 @@ function verifyNativeOfficeCanvasModels() {
     throw new Error('Pivot/Slicer fixture contains local author or filesystem metadata');
   }
 
-  runCanvasRegression({
-    inputName: 'example-document-title-ole.doc',
-    inputSha256: 'd85e44ae5368ccbbe57ded8533ced05a250c30cfa15da10f19fdaf63f080238c',
-    outputSha256: '3487cf192cbdea43816c31712dc7e9a4846bb8b1958a1b0d273d8ecd42fde93d',
-    outputSize: 132614,
-    formatFrom: 66,
-    formatTo: 8193,
-    header: 'DOCY;v5;',
-    expectedMedia: ['display6image1.bin', 'display6image1.emf', 'display6image1.svg'],
-  });
-  runCanvasRegression({
-    inputName: 'pivot-slicer-showcase.xlsx',
-    inputSha256: 'ffecc0a33c9e41b392fbee30127a97f3e5c3577c717be103471460bd07c2ec58',
-    outputSha256: 'dc0acc3071dfdd177e2c45eec6437b8e11b622f5457c22274d591252ac8538e1',
-    outputSize: 85138,
-    formatFrom: 257,
-    formatTo: 8194,
-    header: 'XLSY;v2;',
-    expectedMedia: ['image1.png'],
-  });
+  for (const inputName of Object.keys(canvasRegressions)) {
+    const output = execFileSync(
+      process.execPath,
+      [__filename, '--canvas-regression', inputName],
+      { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 },
+    );
+    process.stdout.write(output);
+  }
 }
 
 function convertExampleTitleOdt() {
@@ -248,6 +259,15 @@ function verifyHtmlDerivedExports() {
 
 x2t.onRuntimeInitialized = function () {
   try {
+    if (process.argv[2] === '--canvas-regression') {
+      const regression = canvasRegressions[process.argv[3]];
+      if (!regression) {
+        throw new Error(`Unknown Canvas regression fixture: ${process.argv[3] || '(empty)'}`);
+      }
+      runCanvasRegression(regression);
+      return;
+    }
+
     convertExampleTitleOdt();
     verifyExampleTitleChart();
     verifyExampleTitleOdpImport();

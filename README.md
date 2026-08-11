@@ -26,7 +26,7 @@ Canvas golden is evaluated.
 The WebAssembly `main1` wrapper resets the document-local identifier generator
 to a fixed seed at the start of every conversion. Generated GUIDs remain unique
 within each document, while wall-clock time can no longer alter `Editor.bin`.
-The exact Canvas goldens are verified from a cold module, and release candidates
+Each exact Canvas golden is verified in its own cold module, and release candidates
 must pass two independent no-cache builds with byte-identical converter assets
 and fixture outputs. Consumers should isolate conversion jobs rather than rely
 on process-global caches retained by repeated `main1` calls.
