@@ -758,7 +758,7 @@ RUN mkdir results
 RUN set -o pipefail \
  && . /emsdk/emsdk_env.sh \
  && node test.js 2>&1 | tee results/test.js.log \
- && node verify-regressions.js
+ && node verify-regressions.js 2>&1 | tee results/verify-regressions.log
 
 
 FROM scratch AS test-output

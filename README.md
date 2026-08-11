@@ -34,11 +34,14 @@ conversion jobs rather than rely on process-global caches retained by repeated
 
 Release tags are built in GitHub Actions from the Dockerfile, tested against
 the repository fixtures, packaged reproducibly, and published with SHA-256,
-SHA-512, and GitHub artifact attestations. Verify a downloaded artifact with:
+SHA-512, the exact real-document regression log, and GitHub artifact
+attestations. Verify downloaded artifacts with:
 
 ```shell
 sha256sum --check onlyoffice-x2t-wasm-v9.3.0+4.tar.gz.sha256
 gh attestation verify onlyoffice-x2t-wasm-v9.3.0+4.tar.gz \
+  --repo agentbridges-ai/onlyoffice-x2t-wasm
+gh attestation verify onlyoffice-x2t-wasm-v9.3.0+4.regressions.log \
   --repo agentbridges-ai/onlyoffice-x2t-wasm
 ```
 

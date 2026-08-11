@@ -32,6 +32,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       archive: ${{ steps.package.outputs.archive }}
+      regression_log: ${{ steps.package.outputs.regression_log }}
       source_commit: ${{ steps.source.outputs.commit }}
     env:
       RELEASE_TAG: ${{ inputs.release_tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
@@ -109,6 +110,7 @@ jobs:
           mv "${RUNNER_TEMP}/x2t-ci-output/results" results
           mv "${RUNNER_TEMP}/x2t-ci-output/build" build
           test -s results/test.js.log
+          test -s results/verify-regressions.log
           test -s build/x2t.js
           test -s build/x2t.wasm
           test -s build/x2t.js.br
@@ -125,10 +127,14 @@ jobs:
             version="${RELEASE_TAG:-manual-${GITHUB_SHA::12}}"
           fi
           archive="onlyoffice-x2t-wasm-${version}.tar.gz"
+          regression_log="onlyoffice-x2t-wasm-${version}.regressions.log"
+          cp results/verify-regressions.log "${regression_log}"
           tar --sort=name --mtime="@${SOURCE_DATE_EPOCH:-0}" --owner=0 --group=0 --numeric-owner \
             -czf "${archive}" -C build .
           sha256sum "${archive}" > "${archive}.sha256"
           sha512sum "${archive}" > "${archive}.sha512"
+          sha256sum "${regression_log}" > "${regression_log}.sha256"
+          sha512sum "${regression_log}" > "${regression_log}.sha512"
           sha256sum \
             build/x2t.js \
             build/x2t.wasm \
@@ -140,15 +146,18 @@ jobs:
             build/x2t.js.br \
             build/x2t.wasm.br > x2t-files.sha512
           echo "archive=${archive}" >> "${GITHUB_OUTPUT}"
+          echo "regression_log=${regression_log}" >> "${GITHUB_OUTPUT}"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: onlyoffice-x2t-wasm-${{ steps.source.outputs.commit }}
           path: |
             build/
             results/test.js.log
+            results/verify-regressions.log
             onlyoffice-x2t-wasm-*.tar.gz
             onlyoffice-x2t-wasm-*.sha256
             onlyoffice-x2t-wasm-*.sha512
+            onlyoffice-x2t-wasm-*.regressions.log
             x2t-files.sha256
             x2t-files.sha512
           if-no-files-found: error
@@ -167,6 +176,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: ${{ inputs.release_tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
       ARCHIVE: ${{ needs.build.outputs.archive }}
+      REGRESSION_LOG: ${{ needs.build.outputs.regression_log }}
       SOURCE_COMMIT: ${{ needs.build.outputs.source_commit }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -220,12 +230,15 @@ jobs:
           test "$(sed -n 's/^version=//p' build/RELEASE)" = "${RELEASE_TAG}"
           sha256sum --check "${ARCHIVE}.sha256"
           sha512sum --check "${ARCHIVE}.sha512"
+          sha256sum --check "${REGRESSION_LOG}.sha256"
+          sha512sum --check "${REGRESSION_LOG}.sha512"
           sha256sum --check x2t-files.sha256
           sha512sum --check x2t-files.sha512
       - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-path: |
             ${{ needs.build.outputs.archive }}
+            ${{ needs.build.outputs.regression_log }}
             build/x2t.js
             build/x2t.wasm
             build/x2t.js.br
@@ -249,6 +262,9 @@ jobs:
             "${ARCHIVE}" \
             "${ARCHIVE}.sha256" \
             "${ARCHIVE}.sha512" \
+            "${REGRESSION_LOG}" \
+            "${REGRESSION_LOG}.sha256" \
+            "${REGRESSION_LOG}.sha512" \
             x2t-files.sha256 \
             x2t-files.sha512 \
             --verify-tag \
